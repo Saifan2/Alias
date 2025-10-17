@@ -1,3 +1,172 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🎯 משחק אליאס</title>
+<style>
+body {
+  font-family: 'Segoe UI', sans-serif;
+  background: linear-gradient(135deg, #74b9ff, #a29bfe);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  margin: 0;
+  text-align: center;
+}
+
+h1 {
+  font-size: 2.5rem;
+  margin-bottom: 10px;
+}
+
+#turn {
+  font-size: 1.4rem;
+  margin-bottom: 20px;
+  background: rgba(0,0,0,0.2);
+  padding: 8px 16px;
+  border-radius: 12px;
+}
+
+#word {
+  font-size: 3rem;
+  font-weight: bold;
+  margin: 30px 0;
+  background: rgba(255,255,255,0.2);
+  padding: 20px 40px;
+  border-radius: 20px;
+}
+
+button {
+  font-size: 1.2rem;
+  border: none;
+  border-radius: 10px;
+  padding: 15px 25px;
+  margin: 10px;
+  cursor: pointer;
+  transition: 0.3s;
+}
+
+button:hover { transform: scale(1.05); }
+
+.correct { background: #00b894; color: #fff; }
+.pass { background: #d63031; color: #fff; }
+.start { background: #00b894; color: #fff; }
+.stop { background: #fdcb6e; color: #2d3436; }
+.reset { background: #0984e3; color: #fff; }
+
+#timer {
+  font-size: 2rem;
+  margin: 10px 0;
+}
+
+#settingsBtn {
+  position: absolute;
+  top: 15px;
+  left: 15px;
+  background: rgba(0,0,0,0.3);
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  font-size: 20px;
+}
+
+#settingsPanel {
+  position: absolute;
+  top: 60px;
+  left: 15px;
+  background: rgba(0,0,0,0.7);
+  padding: 15px;
+  border-radius: 10px;
+  display: none;
+  text-align: right;
+}
+
+label {
+  display: block;
+  margin: 8px 0 4px;
+}
+input {
+  padding: 5px;
+  width: 60px;
+  text-align: center;
+  border-radius: 5px;
+  border: none;
+}
+
+#scoreTable {
+  margin-top: 30px;
+  background: rgba(255,255,255,0.1);
+  padding: 15px;
+  border-radius: 15px;
+  width: 300px;
+}
+
+#scoreTable table {
+  width: 100%;
+  border-collapse: collapse;
+  color: #fff;
+}
+
+#scoreTable th, #scoreTable td {
+  padding: 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.2);
+}
+
+#scoreTable th {
+  text-align: right;
+}
+
+.rank {
+  font-weight: bold;
+  color: #ffeaa7;
+}
+</style>
+</head>
+<body>
+
+<h1>🎲 משחק אליאס</h1>
+<div id="turn">תור קבוצה 1</div>
+
+<div>
+  <button id="correctBtn" class="correct">✅ צדקתי</button>
+  <button id="passBtn" class="pass">❌ העבר</button>
+</div>
+
+<div id="word">לחץ "התחל" כדי להתחיל</div>
+
+<div id="timer">⏱️ 60</div>
+
+<div>
+  <button id="startBtn" class="start">התחל</button>
+  <button id="stopBtn" class="stop">עצור</button>
+  <button id="resetBtn" class="reset">איפוס</button>
+</div>
+
+<button id="settingsBtn">⚙️</button>
+<div id="settingsPanel">
+  <label>⏱️ זמן לסיבוב (שניות):</label>
+  <input type="number" id="roundTime" value="60" min="10" max="300">
+  
+  <label>👥 מספר קבוצות:</label>
+  <input type="number" id="numTeams" value="2" min="1" max="8">
+</div>
+
+<div id="scoreTable">
+  <table>
+    <thead>
+      <tr><th>מקום</th><th>קבוצה</th><th>ניקוד</th></tr>
+    </thead>
+    <tbody id="scoreBody"></tbody>
+  </table>
+</div>
+
+<audio id="endSound" src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_5ab8f57d87.mp3?filename=times-up-105132.mp3"></audio>
+
+<script>
 const words = [
   "חתול", "כלב", "מחשב", "טלפון", "חוף", "שמש", "בית", "מכונית",
   "חלון", "שולחן", "אבטיח", "כדורגל", "מוזיקה", "ספר", "מטוס", "אופניים",
@@ -57,3 +226,122 @@ const words = [
   "ראשון לציון", "רחובות", "מודיעין", "בית שמש", "גדרה", "ראש העין", "קרית גת", "שדרות",
   "כרם", "שוק", "קניון", "אצטדיון", "בית מלון", "תחנה מרכזית", "שדה תעופה", "נמל"
 ];
+
+
+let timer;
+let timeLeft = 60;
+let correctCount = 0;
+let passCount = 0;
+let running = false;
+let activeTeam = 1;
+let teamScores = [0, 0];
+
+const wordDisplay = document.getElementById("word");
+const timerDisplay = document.getElementById("timer");
+const endSound = document.getElementById("endSound");
+const turnDisplay = document.getElementById("turn");
+const scoreBody = document.getElementById("scoreBody");
+
+function newWord() {
+  const randomIndex = Math.floor(Math.random() * words.length);
+  wordDisplay.textContent = words[randomIndex];
+}
+
+function updateTable() {
+  const numTeams = teamScores.length;
+  const sorted = teamScores
+    .map((score, i) => ({ team: i + 1, score }))
+    .sort((a, b) => b.score - a.score);
+  
+  scoreBody.innerHTML = "";
+  sorted.forEach((t, i) => {
+    const row = document.createElement("tr");
+    row.innerHTML = `<td class="rank">${i + 1}</td><td>קבוצה ${t.team}</td><td>${t.score}</td>`;
+    scoreBody.appendChild(row);
+  });
+}
+
+function nextTeam() {
+  const numTeams = teamScores.length;
+  activeTeam++;
+  if (activeTeam > numTeams) activeTeam = 1;
+  turnDisplay.textContent = `תור קבוצה ${activeTeam}`;
+}
+
+document.getElementById("startBtn").onclick = () => {
+  if (running) return;
+  running = true;
+  newWord();
+  timer = setInterval(() => {
+    timeLeft--;
+    timerDisplay.textContent = "⏱️ " + timeLeft;
+    if (timeLeft <= 0) {
+      clearInterval(timer);
+      running = false;
+      endSound.play();
+      const total = Math.max(correctCount - passCount, 0);
+      teamScores[activeTeam - 1] += total;
+      wordDisplay.textContent = `⏰ נגמר הזמן! קבוצה ${activeTeam} הרוויחה ${total} נקודות.`;
+      correctCount = 0;
+      passCount = 0;
+      updateTable();
+      setTimeout(() => {
+        nextTeam();
+        document.getElementById("resetBtn").click();
+      }, 3000);
+    }
+  }, 1000);
+};
+
+document.getElementById("stopBtn").onclick = () => {
+  clearInterval(timer);
+  running = false;
+};
+
+document.getElementById("resetBtn").onclick = () => {
+  clearInterval(timer);
+  running = false;
+  const customTime = parseInt(document.getElementById("roundTime").value);
+  timeLeft = isNaN(customTime) ? 60 : customTime;
+  timerDisplay.textContent = "⏱️ " + timeLeft;
+  wordDisplay.textContent = "לחץ 'התחל' כדי להתחיל";
+  correctCount = 0;
+  passCount = 0;
+};
+
+document.getElementById("correctBtn").onclick = () => {
+  if (!running) return;
+  correctCount++;
+  newWord();
+};
+
+document.getElementById("passBtn").onclick = () => {
+  if (!running) return;
+  passCount++;
+  newWord();
+};
+
+document.getElementById("settingsBtn").onclick = () => {
+  const panel = document.getElementById("settingsPanel");
+  panel.style.display = panel.style.display === "none" ? "block" : "none";
+};
+
+document.getElementById("roundTime").onchange = () => {
+  const val = parseInt(document.getElementById("roundTime").value);
+  timeLeft = val;
+  timerDisplay.textContent = "⏱️ " + val;
+};
+
+document.getElementById("numTeams").onchange = () => {
+  const val = parseInt(document.getElementById("numTeams").value);
+  teamScores = Array.from({ length: val }, () => 0);
+  activeTeam = 1;
+  turnDisplay.textContent = `תור קבוצה ${activeTeam}`;
+  updateTable();
+};
+
+updateTable();
+</script>
+
+</body>
+</html>
