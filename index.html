@@ -12,15 +12,35 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   height: 100vh;
   margin: 0;
   text-align: center;
   transition: background 0.3s;
 }
-h1 { font-size: 2.5rem; margin-bottom: 10px; }
-#turn { font-size: 1.4rem; margin-bottom: 20px; background: rgba(0,0,0,0.2); padding: 8px 16px; border-radius: 12px; }
-#word { font-size: 3rem; font-weight: bold; margin: 30px 0; background: rgba(255,255,255,0.2); padding: 20px 40px; border-radius: 20px; }
+h1 { font-size: 2.5rem; margin: 10px 0; }
+#turn { font-size: 1.4rem; margin-bottom: 10px; background: rgba(0,0,0,0.2); padding: 8px 16px; border-radius: 12px; }
+#wordList {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 5px;
+  margin-top: 10px;
+  background: rgba(0,0,0,0.2);
+  padding: 10px 15px;
+  border-radius: 12px;
+  max-width: 90%;
+  font-size: 1.1rem;
+}
+#wordList span.correctWord { color: #00b894; }
+#wordList span.passWord { color: #d63031; }
+#scoreTable { margin-top: 15px; background: rgba(255,255,255,0.1); padding: 10px; border-radius: 15px; width: 300px; }
+#scoreTable table { width: 100%; border-collapse: collapse; color: #fff; }
+#scoreTable th, #scoreTable td { padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.2); }
+#scoreTable th { text-align: right; }
+.rank { font-weight: bold; color: #ffeaa7; }
+#word { font-size: 3rem; font-weight: bold; margin: 30px 0 10px; background: rgba(255,255,255,0.2); padding: 20px 40px; border-radius: 20px; }
+#roundScore { font-size: 1.3rem; margin-bottom: 15px; background: rgba(0,0,0,0.2); padding: 6px 14px; border-radius: 12px; }
 button { font-size: 1.2rem; border: none; border-radius: 10px; padding: 15px 25px; margin: 10px; cursor: pointer; transition: 0.3s; }
 button:hover { transform: scale(1.05); }
 .correct { background: #00b894; color: #fff; }
@@ -33,14 +53,6 @@ button:hover { transform: scale(1.05); }
 #settingsPanel { position: absolute; top: 60px; left: 15px; background: rgba(0,0,0,0.7); padding: 15px; border-radius: 10px; display: none; text-align: right; }
 label { display: block; margin: 8px 0 4px; }
 input { padding: 5px; width: 60px; text-align: center; border-radius: 5px; border: none; }
-#scoreTable { margin-top: 30px; background: rgba(255,255,255,0.1); padding: 15px; border-radius: 15px; width: 300px; }
-#scoreTable table { width: 100%; border-collapse: collapse; color: #fff; }
-#scoreTable th, #scoreTable td { padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.2); }
-#scoreTable th { text-align: right; }
-.rank { font-weight: bold; color: #ffeaa7; }
-#wordList { margin-top: 20px; max-height: 150px; overflow-y: auto; text-align: left; width: 250px; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 10px; }
-#wordList div.correctWord { color: #00b894; }
-#wordList div.passWord { color: #d63031; }
 .flash { animation: flash-bg 0.2s alternate infinite; }
 @keyframes flash-bg { from { background: linear-gradient(135deg, #74b9ff, #a29bfe); } to { background: linear-gradient(135deg, #ff7675, #d63031); } }
 </style>
@@ -50,13 +62,16 @@ input { padding: 5px; width: 60px; text-align: center; border-radius: 5px; borde
 <h1>🎲 משחק אליאס</h1>
 <div id="turn">תור קבוצה 1</div>
 
+<div id="wordList"></div>
+
+<div id="word">לחץ "התחל" כדי להתחיל</div>
+<div id="roundScore">ניקוד סיבוב: 0</div>
+<div id="timer">⏱️ 60</div>
+
 <div>
   <button id="correctBtn" class="correct">✅ צדקתי</button>
   <button id="passBtn" class="pass">❌ העבר</button>
 </div>
-
-<div id="word">לחץ "התחל" כדי להתחיל</div>
-<div id="timer">⏱️ 60</div>
 
 <div>
   <button id="startBtn" class="start">התחל</button>
@@ -81,8 +96,6 @@ input { padding: 5px; width: 60px; text-align: center; border-radius: 5px; borde
     <tbody id="scoreBody"></tbody>
   </table>
 </div>
-
-<div id="wordList"></div>
 
 <audio id="endSound" src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_5ab8f57d87.mp3?filename=times-up-105132.mp3" preload="auto"></audio>
 
@@ -136,9 +149,11 @@ const words = [
   "ראשון לציון","רחובות","מודיעין","בית שמש","גדרה","ראש העין","קרית גת","שדרות",
   "כרם","שוק","קניון","אצטדיון","בית מלון","תחנה מרכזית","שדה תעופה"
 ];
-let timer, timeLeft = 60, correctCount = 0, passCount = 0, running = false, activeTeam = 1;
+
+let timer, timeLeft = 60, correctCount = 0, passCount = 0, running = false, activeTeam = 1, waitingStart = false;
 let teamScores = JSON.parse(localStorage.getItem("teamScores")) || [0,0];
 let currentRoundWords = [];
+let usedWords = new Set();
 
 const wordDisplay = document.getElementById("word");
 const timerDisplay = document.getElementById("timer");
@@ -146,11 +161,16 @@ const endSound = document.getElementById("endSound");
 const turnDisplay = document.getElementById("turn");
 const scoreBody = document.getElementById("scoreBody");
 const wordListDiv = document.getElementById("wordList");
+const roundScoreDisplay = document.getElementById("roundScore");
 
 function newWord() {
-  const randomIndex = Math.floor(Math.random() * words.length);
-  wordDisplay.textContent = words[randomIndex];
-  return words[randomIndex];
+  const available = words.filter(w => !usedWords.has(w));
+  if (available.length === 0) usedWords.clear(); // אם נגמרו כל המילים
+  const randomIndex = Math.floor(Math.random() * available.length);
+  const selected = available[randomIndex];
+  usedWords.add(selected);
+  wordDisplay.textContent = selected;
+  return selected;
 }
 
 function saveScores() { localStorage.setItem("teamScores", JSON.stringify(teamScores)); }
@@ -171,6 +191,7 @@ function nextTeam() {
   turnDisplay.textContent = `תור קבוצה ${activeTeam}`;
   currentRoundWords = [];
   updateWordList();
+  roundScoreDisplay.textContent = "ניקוד סיבוב: 0";
 }
 
 function flashScreen() {
@@ -180,27 +201,32 @@ function flashScreen() {
 
 function updateWordList() {
   wordListDiv.innerHTML = "";
-  currentRoundWords.forEach(item=>{
-    const div = document.createElement("div");
-    div.textContent = item.word;
-    div.className = item.type==="correct"?"correctWord":"passWord";
-    wordListDiv.appendChild(div);
+  currentRoundWords.forEach((item, i)=>{
+    const span = document.createElement("span");
+    span.textContent = item.word + (i === currentRoundWords.length-1 ? "." : ",");
+    span.className = item.type==="correct"?"correctWord":"passWord";
+    wordListDiv.appendChild(span);
   });
 }
 
 document.getElementById("startBtn").onclick = async ()=>{
-  if(running) return;
-  running = true;
+  if(running || waitingStart) return;
+  waitingStart = true;
+  correctCount = 0; passCount = 0; 
+  roundScoreDisplay.textContent = "ניקוד סיבוב: 0";
 
-  // ספירה לאחור 3 שניות
   for(let i=3;i>0;i--){
     wordDisplay.textContent=`מתחילים בעוד ${i}...`;
     await new Promise(r=>setTimeout(r,1000));
   }
 
+  waitingStart = false;
+  running = true;
   let currentWord = newWord();
   currentRoundWords = [];
   updateWordList();
+  const val = parseInt(document.getElementById("roundTime").value);
+  timeLeft=isNaN(val)?60:val;
   timerDisplay.textContent = "⏱️ "+timeLeft;
 
   timer = setInterval(()=>{
@@ -215,14 +241,12 @@ document.getElementById("startBtn").onclick = async ()=>{
       const total=Math.max(correctCount-passCount,0);
       teamScores[activeTeam-1]+=total;
       saveScores();
-      wordDisplay.textContent=`⏰ נגמר הזמן! קבוצה ${activeTeam} הרוויחה ${total} נקודות.`;
-      correctCount=0; passCount=0;
+      wordDisplay.textContent=`⏰ נגמר הזמן! קבוצה ${activeTeam} השיגה ${total} נקודות.`;
+      roundScoreDisplay.textContent=`ניקוד סיבוב: ${total}`;
       updateTable();
-      // איפוס טיימר
       const val = parseInt(document.getElementById("roundTime").value); 
       timeLeft=isNaN(val)?60:val;
       timerDisplay.textContent="⏱️ "+timeLeft;
-      // מעבר לקבוצה הבאה
       setTimeout(nextTeam,3000);
     }
   },1000);
@@ -233,31 +257,31 @@ document.getElementById("stopBtn").onclick=()=>{ clearInterval(timer); running=f
 document.getElementById("resetBtn").onclick=()=>{
   clearInterval(timer);
   running=false;
+  waitingStart=false;
   const val = parseInt(document.getElementById("roundTime").value);
   timeLeft=isNaN(val)?60:val;
   timerDisplay.textContent="⏱️ "+timeLeft;
   wordDisplay.textContent="לחץ 'התחל' כדי להתחיל";
   correctCount=0; passCount=0;
-  currentRoundWords=[];
-  updateWordList();
+  roundScoreDisplay.textContent="ניקוד סיבוב: 0";
 };
 
 document.getElementById("correctBtn").onclick=()=>{
-  if(!running) return;
+  if(!running || waitingStart) return;
   correctCount++;
-  teamScores[activeTeam-1] = Math.max(teamScores[activeTeam-1],0);
-  saveScores();
   const word = wordDisplay.textContent;
   currentRoundWords.push({word,type:"correct"});
+  roundScoreDisplay.textContent=`ניקוד סיבוב: ${correctCount-passCount}`;
   updateWordList();
   newWord();
-  updateTable();
 };
 
 document.getElementById("passBtn").onclick=()=>{
-  if(!running) return;
+  if(!running || waitingStart) return;
   passCount++;
-  currentRoundWords.push({word:wordDisplay.textContent,type:"pass"});
+  const word = wordDisplay.textContent;
+  currentRoundWords.push({word,type:"pass"});
+  roundScoreDisplay.textContent=`ניקוד סיבוב: ${correctCount-passCount}`;
   updateWordList();
   newWord();
 };
@@ -285,22 +309,21 @@ document.getElementById("numTeams").onchange=()=>{
 document.getElementById("fullReset").onclick=()=>{
   clearInterval(timer);
   running=false;
+  waitingStart=false;
   const num=parseInt(document.getElementById("numTeams").value);
   teamScores=Array.from({length:num},()=>0);
   saveScores();
   correctCount=0; passCount=0; activeTeam=1;
   wordDisplay.textContent="לחץ 'התחל' כדי להתחיל";
+  roundScoreDisplay.textContent="ניקוד סיבוב: 0";
   const val=parseInt(document.getElementById("roundTime").value);
   timeLeft=isNaN(val)?60:val;
   timerDisplay.textContent="⏱️ "+timeLeft;
   turnDisplay.textContent=`תור קבוצה ${activeTeam}`;
-  currentRoundWords=[];
-  updateWordList();
   updateTable();
 };
 
 updateTable();
-updateWordList();
 </script>
 </body>
 </html>
